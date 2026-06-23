@@ -15,6 +15,7 @@ const PORT = process.env.PORT || 3456;
 // ---- Middleware ----
 app.use(cors());
 app.use(express.json());
+app.use(express.static(__dirname));
 
 // ---- OpenAI Client ----
 const openai = process.env.OPENAI_API_KEY
