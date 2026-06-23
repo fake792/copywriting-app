@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文案灵境 — AI 电商文案生成器</title>
+<style>
+/* ===== CSS Reset & Variables ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary: #f97316;
+  --primary-dark: #ea580c;
+  --accent: #dc2626;
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,.1);
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ===== Header ===== */
+.header {
+  background: linear-gradient(135deg, #f97316 0%, #f59e0b 50%, #ef4444 100%);
+  color: white;
+  padding: 32px 20px;
+  text-align: center;
+}
+.header h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+.header p {
+  margin-top: 8px;
+  opacity: .85;
+  font-size: .95rem;
+}
+.header .badge {
+  display: inline-block;
+  margin-top: 12px;
+  background: rgba(255,255,255,.2);
+  backdrop-filter: blur(10px);
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: .8rem;
+  letter-spacing: .05em;
+}
+
+/* ===== Nav Tabs ===== */
+.nav-tabs { max-width:980px; margin:0 auto; padding:0 16px; display:flex; gap:4px; }
+.nav-tab { padding:10px 20px; border:none; border-radius:10px 10px 0 0; background:#e2e8f0; color:#64748b; cursor:pointer; font-size:.88rem; font-weight:600; transition:all .15s; font-family:inherit; }
+.nav-tab:hover { background:#cbd5e1; color:#334155; }
+.nav-tab.active { background:var(--card); color:var(--primary); box-shadow:0 -2px 8px rgba(0,0,0,.06); }
+
+/* ===== History Panel ===== */
+.history-list { display:flex; flex-direction:column; gap:8px; max-height:500px; overflow-y:auto; }
+.history-item { padding:12px 16px; border:1px solid var(--border); border-radius:var(--radius-sm); background:#fafbfc; cursor:pointer; transition:all .15s; }
+.history-item:hover { border-color:var(--primary); background:#fff7ed; }
+.history-item .meta { font-size:.78rem; color:var(--text-muted); margin-bottom:4px; display:flex; gap:8px; flex-wrap:wrap; }
+.history-item .preview { font-size:.85rem; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.btn-clear-history { padding:8px 16px; border:1px solid #fecaca; border-radius:6px; background:#fef2f2; color:#dc2626; cursor:pointer; font-size:.8rem; margin-top:12px; }
+
+/* ===== Batch Panel ===== */
+.batch-result-item { padding:12px; border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:10px; background:#fafbfc; white-space:pre-wrap; font-size:.85rem; }
+.batch-result-item h4 { margin-bottom:8px; color:var(--primary); }
+
+/* ===== Layout ===== */
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  display: grid;
+  gap: 24px;
+  grid-template-columns: 1fr 1fr;
+}
+@media (max-width: 768px) {
+  .container { grid-template-columns: 1fr; }
+}
+
+/* ===== Cards ===== */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.card h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card h2 .icon { font-size: 1.3rem; }
+
+/* ===== Form ===== */
+.form-group { margin-bottom: 16px; }
+.form-group label {
+  display: block;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: .95rem;
+  font-family: inherit;
+  transition: border-color .2s, box-shadow .2s;
+  background: #fafbfc;
+  @media (prefers-reduced-motion: reduce) { transition: none; }
+  resize: vertical;
+}
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(249,115,22,.15);
+  background: white;
+}
+.form-group textarea { min-height: 80px; }
+
+/* ===== Platform Selector ===== */
+.platform-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.platform-btn {
+  padding: 12px 10px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: white;
+  cursor: pointer;
+  font-size: .85rem;
+  font-weight: 600;
+  transition: all .2s;
+  text-align: center;
+  color: var(--text-muted);
+}
+.platform-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.platform-btn.active {
+  border-color: var(--primary);
+  background: #fff7ed;
+  color: var(--primary);
+}
+
+/* ===== Tone Selector ===== */
+.tone-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tone-btn {
+  padding: 6px 16px;
+  border: 2px solid var(--border);
+  border-radius: 20px;
+  background: white;
+  cursor: pointer;
+  font-size: .82rem;
+  font-weight: 500;
+  transition: all .2s;
+  color: var(--text-muted);
+}
+.tone-btn:hover { border-color: var(--primary); color: var(--primary); }
+.tone-btn.active {
+  border-color: var(--accent);
+  background: #fff1f2;
+  color: var(--accent);
+}
+
+/* ===== Generate Button ===== */
+.btn-generate {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--primary), #f59e0b);
+  color: white;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .2s;
+  letter-spacing: .02em;
+}
+.btn-generate:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(249,115,22,.35);
+}
+.btn-generate:active { transform: translateY(0); }
+
+/* ===== Output Area ===== */
+.output-card { grid-column: 1 / -1; }
+.output-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.output-tabs { display: flex; gap: 4px; }
+.output-tab {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: .82rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: all .15s;
+}
+.output-tab.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.btn-copy {
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: .82rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: all .15s;
+}
+.btn-copy:hover { border-color: var(--primary); color: var(--primary); }
+.btn-copy.copied { background: #dcfce7; border-color: #22c55e; color: #16a34a; }
+
+.output-text {
+  background: #fafbfc;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 20px;
+  min-height: 200px;
+  white-space: pre-wrap;
+  font-size: .95rem;
+  line-height: 1.8;
+  color: var(--text);
+}
+
+/* ===== Examples ===== */
+.examples-card { grid-column: 1 / -1; }
+.example-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px,1fr));
+  gap: 12px;
+}
+.example-item {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: .82rem;
+  transition: all .15s;
+  background: #fafbfc;
+}
+.example-item:hover {
+  border-color: var(--primary);
+  background: #fff7ed;
+  transform: translateY(-1px);
+}
+
+/* ===== Monetization Banner ===== */
+.banner {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  color: white;
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+}
+.banner h3 { font-size: 1.1rem; margin-bottom: 8px; }
+.banner p { opacity: .75; font-size: .9rem; line-height: 1.6; }
+.banner .price-tag {
+  display: inline-block;
+  margin-top: 12px;
+  background: var(--accent);
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+/* ===== Placeholder ===== */
+.placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 40px 0;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <h1>✨ 文案灵境</h1>
+  <p>输入产品信息 → 秒出爆款文案 · 覆盖四大主流平台</p>
+  <div style="display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:12px;">
+    <span class="badge" id="modeToggle" style="cursor:pointer;user-select:none;" title="点击切换 AI 模式">📋 模板引擎模式</span>
+    <span class="badge" id="apiStatus" style="display:none;">🔌 未连接 API</span>
+  </div>
+</header>
+
+<!-- Nav Tabs -->
+<nav class="nav-tabs" id="navTabs">
+  <button class="nav-tab active" data-view="generate">🚀 生成文案</button>
+  <button class="nav-tab" data-view="history">📋 历史记录 <span id="historyCount" style="font-size:.7rem;opacity:.7;"></span></button>
+  <button class="nav-tab" data-view="batch">📦 批量生成</button>
+</nav>
+
+<!-- Main Form + Preview -->
+<div class="container">
+
+  <!-- Input Card -->
+  <div class="card">
+    <h2><span class="icon">📝</span> 产品信息</h2>
+    <div class="form-group">
+      <label>产品名称</label>
+      <input type="text" id="productName" placeholder="例如：氨基酸洁面慕斯">
+    </div>
+    <div class="form-group">
+      <label>核心卖点</label>
+      <textarea id="features" placeholder="例如：温和不紧绷、三重氨基酸、敏感肌可用、绵密泡沫"></textarea>
+    </div>
+    <div class="form-group">
+      <label>目标人群</label>
+      <input type="text" id="audience" placeholder="例如：25-35岁注重护肤的都市女性">
+    </div>
+  </div>
+
+  <!-- Platform & Tone Card -->
+  <div class="card">
+    <h2><span class="icon">🎯</span> 发布平台</h2>
+    <div class="platform-grid" id="platformGrid">
+      <button class="platform-btn active" data-platform="xiaohongshu">📕 小红书</button>
+      <button class="platform-btn" data-platform="pengyouquan">💬 朋友圈</button>
+      <button class="platform-btn" data-platform="taobao">🛒 淘宝详情</button>
+      <button class="platform-btn" data-platform="douyin">🎵 抖音口播</button>
+    </div>
+
+    <div class="form-group" style="margin-top:16px;">
+      <label>文案风格</label>
+      <div class="tone-grid" id="toneGrid">
+        <button class="tone-btn active" data-tone="lively">🔥 活泼种草</button>
+        <button class="tone-btn" data-tone="professional">💼 专业信赖</button>
+        <button class="tone-btn" data-tone="emotional">💕 走心共情</button>
+        <button class="tone-btn" data-tone="trendy">⚡ 标题党</button>
+      </div>
+    </div>
+
+    <button class="btn-generate" id="btnGenerate">🚀 生成文案</button>
+  </div>
+
+  <!-- Output Card -->
+  <div class="card output-card" id="outputCard">
+    <div class="output-header">
+      <div class="output-tabs" id="outputTabs">
+        <button class="output-tab active" data-index="0">方案 A</button>
+        <button class="output-tab" data-index="1">方案 B</button>
+        <button class="output-tab" data-index="2">方案 C</button>
+      </div>
+      <button class="btn-copy" id="btnCopy">📋 一键复制</button>
+    </div>
+    <div class="output-text" id="outputText">
+      <div class="placeholder">👆 填入产品信息，点击「生成文案」开始创作</div>
+    </div>
+  </div>
+
+  <!-- Quick Examples -->
+  <div class="card examples-card">
+    <h2><span class="icon">💡</span> 试试这些例子</h2>
+    <div class="example-list" id="exampleList">
+      <div class="example-item" data-example="skincare">🧴 护肤品样例</div>
+      <div class="example-item" data-example="snack">🍪 零食样例</div>
+      <div class="example-item" data-example="course">📚 在线课程样例</div>
+      <div class="example-item" data-example="gadget">⚡ 数码小物样例</div>
+      <div class="example-item" data-example="clothes">👗 服装样例</div>
+      <div class="example-item" data-example="service">🏠 家政服务样例</div>
+    </div>
+  </div>
+
+  <!-- History Panel -->
+  <div class="card examples-card" id="panelHistory" style="display:none;">
+    <h2><span class="icon">📋</span> 历史记录</h2>
+    <div class="history-list" id="historyList"><p style="color:var(--text-muted);text-align:center;padding:20px;">暂无历史记录</p></div>
+    <button class="btn-clear-history" id="btnClearHistory" style="display:none;">🗑️ 清空历史</button>
+  </div>
+
+  <!-- Batch Panel -->
+  <div class="card" id="panelBatch" style="display:none;grid-column:1/-1;">
+    <h2><span class="icon">📦</span> 批量生成</h2>
+    <p style="color:var(--text-muted);font-size:.85rem;margin-bottom:12px;">每行一个产品，格式：<code>产品名称 | 卖点1、卖点2、卖点3 | 目标人群</code></p>
+    <div class="form-group batch-panel">
+      <textarea id="batchInput" placeholder="氨基酸洁面慕斯 | 温和不紧绷、三重氨基酸、敏感肌可用 | 25-35岁女性&#10;磁吸充电宝 | 10000mAh、MagSafe吸附、20W快充 | iPhone用户"></textarea>
+    </div>
+    <button class="btn-generate" id="btnBatchGenerate">🚀 批量生成</button>
+    <div class="batch-results" id="batchResults"></div>
+  </div>
+
+  <!-- Monetization Banner -->
+  <div class="banner">
+    <h3>💎 想把这个产品变现？</h3>
+    <p>
+      免费版 · 每天 5 次生成 | 
+      <strong>Pro 版 ¥19.9/月</strong>：无限生成 + 小红书话题标签 + 长文模式 |
+      <strong>企业版 ¥99/月</strong>：API 接入 + 批量生成 + 私有模板
+    </p>
+    <span class="price-tag">💰 1000 用户 × ¥19.9 = ¥19,900/月</span>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// 文案灵境 — 核心引擎
+// ============================================================
+
+// ---- State ----
+let state = {
+  platform: 'xiaohongshu',
+  tone: 'lively',
+  currentVariant: 0,
+  results: [],
+  useAI: false,
+  apiAvailable: false,
+  isGenerating: false,
+  apiUrl: (() => {
+    // Auto-detect: local dev vs production
+    if (window.location.protocol === 'file:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:3001/api/generate';
+    }
+    // Deployed on Vercel → proxies to Railway backend
+    return '/api/generate';
+  })(),
+};
+
+// ---- Example data ----
+const examples = {
+  skincare: { name: '氨基酸温和洁面慕斯', features: '三重氨基酸表活、pH5.5弱酸性、添加积雪草提取物、无需起泡一按出泡、洗后不紧绷不假滑', audience: '敏感肌、干皮、25-35岁注重温和清洁的都市女性' },
+  snack: { name: '益生菌每日坚果', features: '7种坚果+果干科学配比、每包含100亿活性益生菌、独立小包锁鲜、0添加蔗糖', audience: '注重健康的零食爱好者、办公室白领、健身人群' },
+  course: { name: 'Python自动化办公实战课', features: '60节视频课、真实企业案例、学完能用、赠送全部源码、终身回看', audience: '想提升效率的职场人、行政/财务/运营人员' },
+  gadget: { name: '磁吸无线充电宝', features: '10000mAh大容量、MagSafe强磁吸附、20W快充、超薄仅8mm、可同时充两台设备', audience: 'iPhone用户、数码玩家、经常出差的商务人士' },
+  clothes: { name: '冰氧吧防晒外套', features: 'UPF100+全波段防晒、冰感面料体感降温5°C、仅重120g可收纳成巴掌大小、透气不闷汗', audience: '夏季通勤女性、户外运动爱好者、注重防晒的精致女性' },
+  service: { name: '深度全屋除菌保洁', features: '高温蒸汽杀菌、6区108项精细清洁、自备专业设备、不满意免费返工、服务全程上保险', audience: '有小孩宠物的家庭、搬新家的业主、工作忙没空打扫的年轻人' },
+};
+
+// ---- Template Engine ----
+// Template functions return [variantA, variantB, variantC]
+const templates = {
+  xiaohongshu: {
+    lively: (p) => [
+      `✨ 姐妹们！！我挖到宝了！！\n\n就是这款【${p.name}】\n我真的会谢…怎么现在才遇到它😭\n\n📌 ${p.features.split('、')[0]}\n📌 ${p.features.split('、')[1] || '效果肉眼可见'}\n📌 ${p.features.split('、')[2] || '用一次就爱上'}\n\n${p.audience || '所有姐妹'}闭眼入就完了！！！\n\n真的绝绝子 我已经回购三次了💕\n\n#好物分享 #种草 #${p.name.replace(/[^\w\u4e00-\u9fff]/g,'')} #爱用物推荐`,
+      `🔥 分享一个被问爆了的好东西！\n\n【${p.name}】\n我已经用空两瓶了（真的）\n\n为什么这么爱它👇\n✨ ${p.features.split('、')[0]}\n✨ ${p.features.split('、')[1] || '一整个爱上'}\n✨ ${p.features.split('、')[2] || '效果太绝'}\n\n💡 小tips：${p.audience ? p.audience + '适合' : '谁用谁知道'}\n\n真的不踩雷 放心冲！！！\n\n#宝藏产品 #私藏好物 #${p.name.slice(0,4)}`,
+      `😱 当我发现${p.name.slice(0, 5)}……\n\n它是来报恩的吧？？\n\n💚 ${p.features.split('、')[0]}\n💚 ${p.features.split('、')[1] || '体验感满分'}\n💚 ${p.features.split('、')[2] || '每天都想用'}\n\n${p.audience || '所有人'} 都给我冲！！\n\n不好用你来评论区骂我👇\n\n#相见恨晚 #好物推荐官 #种草日记`
+    ],
+    professional: (p) => [
+      `📖 深度测评 | ${p.name}\n\n最近很多朋友问我这款产品怎么样\n今天从专业角度分析一下👇\n\n🔬 核心成分/技术：\n· ${p.features.split('、')[0]}\n· ${p.features.split('、')[1] || '配方科学合理'}\n· ${p.features.split('、')[2] || '经过严格测试'}\n\n👩‍🔬 适合人群：${p.audience || '大多数用户'}\n\n📊 综合评分：★★★★★\n性价比：★★★★★\n推荐指数：★★★★★\n\n理性种草，按需选择～\n\n#真实测评 #成分党 #好物测评`,
+      `📝 ${p.name} | 用了30天的真实感受\n\n不吹不黑，优缺点都说清楚：\n\n✅ 优势：\n1️⃣ ${p.features.split('、')[0]}\n2️⃣ ${p.features.split('、')[1] || '品质稳定'}\n3️⃣ ${p.features.split('、')[2] || '细节到位'}\n\n⚠️ 注意事项：\n· 建议${p.audience ? p.audience : '根据自身情况选择'}\n\n💡 总结：值得入手，理性消费\n\n#产品评测 #干货分享 #自用分享`,
+      `🎓 为什么我推荐${p.name}？\n\n做了3天的功课，分享一下：\n\n📚 知识点：\n① ${p.features.split('、')[0]}\n② ${p.features.split('、')[1] || '有数据支撑'}\n③ ${p.features.split('、')[2] || '用户口碑好'}\n\n👤 推荐给：${p.audience || '正在寻找解决方案的你'}\n\n🔗 想了解更多？评论区告诉我\n\n#知识分享 #专业推荐 #真实体验`
+    ],
+    emotional: (p) => [
+      `💕 30岁以后，我终于学会了……\n\n不再盲目追求大牌\n而是认真听自己身体/内心的声音\n\n遇到【${p.name}】的那天\n就像遇到了懂你的朋友\n\n🌿 ${p.features.split('、')[0]}\n🌿 ${p.features.split('、')[1] || '温柔而坚定'}\n🌿 ${p.features.split('、')[2] || '恰到好处的陪伴'}\n\n${p.audience ? '给' + p.audience + '的你' : '给认真生活的你'}\n\n你值得更好的 💕\n\n#治愈系 #好好生活 #温柔的力量`,
+      `🍂 有时候，幸福就是……\n\n在忙碌的一天后\n用/穿上/打开【${p.name}】\n\n它不会说话\n却总能治愈疲惫\n\n💫 ${p.features.split('、')[0]}\n💫 ${p.features.split('、')[1] || '懂你的每一个需求'}\n💫 ${p.features.split('、')[2] || '刚刚好的温度'}\n\n${p.audience ? p.audience + '的日常小确幸' : '生活的温柔细节'}\n\n谁说小确幸不重要呢？\n\n#治愈日常 #生活美学 #幸福感`,
+      `✨ 我们都在寻找……\n\n一个能让自己\n更从容、更自在的东西/方式\n\n【${p.name}】\n不喧哗，自有声\n\n🌸 ${p.features.split('、')[0]}\n🌸 ${p.features.split('、')[1] || '无声的呵护'}\n🌸 ${p.features.split('、')[2] || '润物细无声'}\n\n献给${p.audience || '认真对待每一天的你'}\n\n愿我们都被温柔以待 🌙\n\n#生活感悟 #温柔系 #好物分享`
+    ],
+    trendy: (p) => [
+      `⚠️ 紧急通知！！！\n\n发现一个【${p.name}】\n不分享我真的会睡不着觉！！\n\n🔥 ${p.features.split('、')[0]}\n🔥 ${p.features.split('、')[1] || '效果炸裂'}\n🔥 ${p.features.split('、')[2] || '用了都说好'}\n\n${p.audience ? p.audience + '的福音来了！' : '错过后悔一年！'}\n\n💥 点击收藏，不然刷着刷着就找不到了！\n\n#爆款 #好物推荐 #必入`,
+      `🚨 停！先别划走！\n\n如果你也是${p.audience || '追求品质的人'}\n这个【${p.name}】你必须知道！\n\n👇 三个让我跪了的点：\n\n1️⃣ ${p.features.split('、')[0]}\n2️⃣ ${p.features.split('、')[1] || '太上头了'}\n3️⃣ ${p.features.split('、')[2] || '谁用谁知道'}\n\n💬 评论区告诉我——你觉得值不值？\n\n#惊呆了 #好物 #种草`,
+      `🎯 你不会还不知道吧？？\n\n${p.name}\n\n已经刷爆我的朋友圈了……\n\n⚡ ${p.features.split('、')[0]}\n⚡ ${p.features.split('、')[1] || '太卷了'}\n⚡ ${p.features.split('、')[2] || '闭眼入'}\n\n${p.audience ? p.audience + '都在用' : '全网都在抢'}\n\n🏃‍♂️ 赶紧码住！！\n\n#刷到了就看看吧 #爆款预警 #好物分享`
+    ]
+  },
+
+  pengyouquan: {
+    lively: (p) => [
+      `🎉 朋友们！！我被这个【${p.name}】彻底征服了！\n\n真的没想到这么好用/好吃/好穿～\n\n· ${p.features.split('、')[0]}\n· ${p.features.split('、')[1] || '体验满分'}\n· ${p.features.split('、')[2] || '每天必用'}\n\n已经安利给全家了哈哈哈\n需要的私我拿链接！😆`,
+      `哈哈哈笑死 同事问我最近怎么状态这么好\n\n其实秘密就是👇\n【${p.name}】\n\n${p.features.split('、')[0]}\n${p.features.split('、')[1] || '真的绝'}\n\n不多说了 懂得都懂\n链接放评论了自取～`,
+      `好物分享时间到～\n\n最近入的【${p.name}】\n真的后悔没早点买！！\n\n✨ ${p.features.split('、')[0]}\n✨ ${p.features.split('、')[1] || '性价比超高'}\n\n${p.audience ? p.audience + '闭眼入' : '强烈推荐'}\n\n要链接的私我～`
+    ],
+    professional: (p) => [
+      `【认真推荐】${p.name}\n\n做了不少功课才选的这个\n分享给有需要的朋友：\n\n✅ ${p.features.split('、')[0]}\n✅ ${p.features.split('、')[1] || '品质可靠'}\n✅ ${p.features.split('、')[2] || '值得信赖'}\n\n适合：${p.audience || '大多数场景'}\n\n货比三家后的选择，供参考。`,
+      `分享一个靠谱选择\n\n${p.name}\n\n研究了一段时间，总结几个优点：\n\n① ${p.features.split('、')[0]}\n② ${p.features.split('、')[1] || '用料扎实'}\n③ ${p.features.split('、')[2] || '售后也不错'}\n\n${p.audience ? '特别是' + p.audience + '的朋友，' : ''}可以考虑\n\n理性推荐，需要的自取。`,
+      `朋友问了我好几次 统一回复\n\n我用的就是【${p.name}】\n\n为什么选它？\n· ${p.features.split('、')[0]}\n· ${p.features.split('、')[1] || '口碑好'}\n· ${p.features.split('、')[2] || '性价比高'}\n\n${p.audience || '谁用谁知道'}\n\n链接在评论，有问题随时问。`
+    ],
+    emotional: (p) => [
+      `年纪越大，越喜欢简单的东西。\n\n【${p.name}】\n不花哨，不张扬\n但是刚刚好。\n\n${p.features.split('、')[0]}\n${p.features.split('、')[1] || '安静地做好自己的事'}\n\n${p.audience ? '愿' + p.audience + '的我们' : '愿我们'}\n都能被生活温柔以待 🌿`,
+      `有时候\n一个小小的改变\n就能让日子亮起来\n\n最近开始用【${p.name}】\n${p.features.split('、')[0]}\n\n生活好像多了一点仪式感\n多了一点对自己的好\n\n分享给${p.audience || '同样认真生活的你'} 💕`,
+      `突然想起一句话：\n\n"你值得所有美好的东西"\n\n所以想把最近发现的【${p.name}】\n分享给你们\n\n🌱 ${p.features.split('、')[0]}\n🌱 ${p.features.split('、')[1] || '让日常变得不寻常'}\n\n${p.audience ? p.audience + '的日常小美好' : '送给自己的一份心意'}\n\n要开心呀～`
+    ],
+    trendy: (p) => [
+      `讲真 这东西有点东西……\n\n【${p.name}】\n\n用之前：能有啥特别的？\n用之后：怎么没早点买！！\n\n⚡ ${p.features.split('、')[0]}\n⚡ ${p.features.split('、')[1] || '太香了'}\n\n需要的赶紧 趁还没涨价\n👇链接在评论`,
+      `最近这个【${p.name}】太火了\n\n我也跟风入了 结果……\n\n真香！！😂\n\n🔥 ${p.features.split('、')[0]}\n🔥 ${p.features.split('、')[1] || '确实可以'}\n\n${p.audience ? p.audience + '的朋友' : '朋友们'}冲就完了\n链接在评论区👇`,
+      `OMG！！\n\n你们一定要知道这个【${p.name}】\n\n我已经推荐给至少10个人了……\n\n💯 ${p.features.split('、')[0]}\n💯 ${p.features.split('、')[1] || '绝绝子'}\n💯 ${p.features.split('、')[2] || '值哭了'}\n\n不好用来打我！\n链接私我～`
+    ]
+  },
+
+  taobao: {
+    lively: (p) => [
+      `🔥【${p.name}】🔥\n\n宝子们！这款真的卖爆了！！\n\n✅ ${p.features.split('、')[0]}\n✅ ${p.features.split('、')[1] || '品质升级'}\n✅ ${p.features.split('、')[2] || '用料扎实'}\n✅ ${p.features.split('、')[3] || '好评如潮'}\n\n🎁 今日下单享专属优惠\n🚚 顺丰包邮 急速发货\n💯 七天无理由 放心购\n\n${p.audience ? p.audience + '强烈推荐！' : '速抢！手慢无！'}\n\n#爆款推荐 #必买清单`,
+      `💥 太卷了！！为了这款【${p.name}】\n我们跟工厂磨了三个月！！\n\n品质对标大牌，价格只要三分之一！！\n\n🌟 ${p.features.split('、')[0]}\n🌟 ${p.features.split('、')[1] || '细节满分'}\n🌟 ${p.features.split('、')[2] || '售后无忧'}\n\n限时特惠 错过等半年！！\n点击立即购买👇👇👇`,
+      `🎯 ${p.audience || '所有人'}看过来！！\n\n【${p.name}】专为你打造！\n\n💎 ${p.features.split('、')[0]}\n💎 ${p.features.split('、')[1] || '高端体验'}\n💎 ${p.features.split('、')[2] || '细节控必入'}\n\n💰 性价比拉满\n🎁 买就送精美包装\n🏃 库存告急 速抢！`
+    ],
+    professional: (p) => [
+      `【${p.name}】— 专业之选\n\n产品参数：\n━━━━━━━━━━\n🔹 ${p.features.split('、')[0]}\n🔹 ${p.features.split('、')[1] || '技术领先'}\n🔹 ${p.features.split('、')[2] || '品质认证'}\n🔹 ${p.features.split('、')[3] || '售后保障'}\n━━━━━━━━━━\n\n🎯 适用人群：${p.audience || '广泛适用'}\n\n💡 为什么选择我们：\n· 源头工厂 直供价格\n· 严格质检 品质保证\n· 7天无理由 购物无忧\n\n📦 今日下单，48小时内发货\n\n点击【立即购买】👇`,
+      `━━━━━━━━━━━━━━\n   ${p.name}\n   好品质 · 看得见\n━━━━━━━━━━━━━━\n\n✨ 产品亮点：\n\n① ${p.features.split('、')[0]}\n② ${p.features.split('、')[1] || '真材实料'}\n③ ${p.features.split('、')[2] || '精工细作'}\n④ ${p.features.split('、')[3] || '完善售后'}\n\n📊 ${p.audience ? p.audience + '首选' : '万人优选'}\n\n━━━━━━━━━━━━━━\n💯 品质承诺 · 售后无忧\n📦 全国包邮 · 闪电发货\n━━━━━━━━━━━━━━`,
+      `🏆 口碑之选 | ${p.name}\n\n累计好评 10,000+ 💬\n\n为什么这么多人选择？\n\n🔸 ${p.features.split('、')[0]}\n🔸 ${p.features.split('、')[1] || '品质可靠'}\n🔸 ${p.features.split('、')[2] || '体验出众'}\n🔸 ${p.features.split('、')[3] || '口碑之选'}\n\n👤 适合：${p.audience || '追求品质的你'}\n\n🛒 立即购买，开启品质生活`
+    ],
+    emotional: (p) => [
+      `🍃 生活，本该如此\n\n不将就，也不奢侈\n刚好是想要的样子\n\n【${p.name}】\n━━━━━━━━\n✨ ${p.features.split('、')[0]}\n✨ ${p.features.split('、')[1] || '温柔相待'}\n✨ ${p.features.split('、')[2] || '刚刚好'}\n━━━━━━━━\n\n${p.audience ? '献给' + p.audience : '献给认真生活的你'}\n\n🌿 让每一天，都值得被认真对待`,
+      `💌 给你在乎的人\n也给你自己\n\n一份来自【${p.name}】的温柔\n\n🌸 ${p.features.split('、')[0]}\n🌸 ${p.features.split('、')[1] || '细腻入微'}\n🌸 ${p.features.split('、')[2] || '懂你所需'}\n\n${p.audience ? p.audience + '值得这份美好' : '你值得这份美好'}\n\n🎀 精致包装 · 送礼自用两相宜`,
+      `📖 每一个产品背后\n都有一个故事\n\n【${p.name}】想给你的\n不只是功能\n更是一份安心和自在\n\n🌙 ${p.features.split('、')[0]}\n🌙 ${p.features.split('、')[1] || '守护日常'}\n🌙 ${p.features.split('、')[2] || '细水长流的好'}\n\n给${p.audience || '自己'}一份礼物吧 💝`
+    ],
+    trendy: (p) => [
+      `⚡【限时特价】${p.name} ⚡\n\n⚠️ 库存仅剩最后 200 件！！\n⚠️ 活动倒计时 24 小时！！\n\n🔥 ${p.features.split('、')[0]}\n🔥 ${p.features.split('、')[1] || '卖爆了'}\n🔥 ${p.features.split('、')[2] || '手慢无'}\n\n原价: ￥XXX\n❗ 券后价: ￥XX\n\n${p.audience ? p.audience + '都' : '全网都'}在抢！！\n👇点击抢购👇`,
+      `🎯 今天必须拿下！！\n\n【${p.name}】\n年度爆款 好评率99%！！\n\n💥 ${p.features.split('、')[0]}\n💥 ${p.features.split('、')[1] || '效果炸裂'}\n💥 ${p.features.split('、')[2] || '卖疯了'}\n\n💰 券后只需 ¥XX\n🎁 买2件送赠品\n🚚 顺丰包邮\n\n🏃 手慢无！！速抢！！！`,
+      `🚨 最后提醒！！\n\n${p.name} 特价活动即将结束\n\n✅ ${p.features.split('、')[0]}\n✅ ${p.features.split('、')[1] || '闭眼入'}\n✅ ${p.features.split('、')[2] || '疯抢中'}\n\n${p.audience || '懂的人'}已经在买了\n你还在犹豫什么？？\n\n👇 立即抢购 👇`
+    ]
+  },
+
+  douyin: {
+    lively: (p) => [
+      `🎬 口播脚本 · ${p.name}\n\n（镜头：产品特写 + 主播出镜）\n\n【0-3秒 抓眼球】\n姐妹们！！这个东西真的绝了！！\n\n【3-8秒 亮卖点】\n来来来看一下——\n${p.features.split('、')[0]}\n${p.features.split('、')[1] || '你看这个效果'}\n真的不是吹的！！\n\n【8-12秒 场景】\n${p.audience ? p.audience + '的姐妹们' : '所有姐妹'}听我说\n这个东西你们一定要有！！\n\n【12-15秒 促单】\n链接放左下角了\n赶紧去拍！！手慢就没了！！`,
+      `🎬 口播脚本 · ${p.name}\n\n【开场 hook】\n（夸张表情）\n不会还有人不知道吧？？\n\n【产品展示】\n就是这个【${p.name}】\n给你们近距离看一下——\n${p.features.split('、')[0]}\n${p.features.split('、')[1] || '这质感绝了'}\n\n【使用场景】\n${p.audience || '所有人'}都给我安排上！！\n\n【促单】\n左下角链接 库存不多了\n赶紧的！！`,
+      `🎬 口播脚本 · ${p.name}\n\n【0-5秒】\n（惊喜脸）\n天呐！！这是什么神仙东西！！\n\n【5-10秒】\n【${p.name}】\n${p.features.split('、')[0]}\n${p.features.split('、')[1] || '太上头了'}\n${p.features.split('、')[2] || '用一次就忘不了'}\n\n【10-12秒】\n${p.audience || '所有人'} 真的可以闭眼冲\n\n【12-15秒】\n来 左下角 自己去看\n记得回来谢我！！`
+    ],
+    professional: (p) => [
+      `🎬 专业讲解脚本 · ${p.name}\n\n【开场】\n（沉稳出镜）\n今天不卖关子\n直接聊干货——\n\n【剖析卖点】\n【${p.name}】好在哪？\n\n第一，${p.features.split('、')[0]}\n（展示细节/数据）\n\n第二，${p.features.split('、')[1] || '工艺/技术过硬'}\n（对比竞品）\n\n第三，${p.features.split('、')[2] || '售后/服务到位'}\n\n【收尾】\n${p.audience ? p.audience + '的朋友' : '需要的朋友'}\n左下角链接，放心入。`,
+      `🎬 深度测评脚本 · ${p.name}\n\n（专业调性）\n\n很多粉丝让我测这款【${p.name}】\n今天安排！\n\n🔍 实测结果：\n\n维度1：${p.features.split('、')[0]}\n→ 表现优异\n\n维度2：${p.features.split('、')[1] || '核心指标'}\n→ 符合预期\n\n维度3：${p.features.split('、')[2] || '综合评价'}\n→ 值得推荐\n\n🎯 ${p.audience || '对品质有要求的朋友'}可以考虑\n\n左下角有链接，按需选择`,
+      `🎬 选品攻略 · ${p.name}\n\n（专业分享）\n\n做功课做了两周\n最后选了这款\n\n理由很简单：\n\n1️⃣ ${p.features.split('、')[0]}\n2️⃣ ${p.features.split('、')[1] || '口碑没得说'}\n3️⃣ ${p.features.split('、')[2] || '性价比合理'}\n\n适合：${p.audience || '大多数用户'}\n\n左下角链接，自取\n有问题评论区问👇`
+    ],
+    emotional: (p) => [
+      `🎬 走心口播 · ${p.name}\n\n（柔和光线，慢镜头）\n\n【开场】（轻声音）\n我想跟你聊一个事……\n\n我们每天都在忙\n却很少停下来对自己好一点\n\n【引入产品】\n直到我遇到了【${p.name}】\n\n${p.features.split('、')[0]}\n${p.features.split('、')[1] || '像一个温柔的老朋友'}\n\n【情感升华】\n${p.audience ? p.audience + '的我们' : '我们'}\n值得被好好对待 💕\n\n【轻促单】\n链接在左下角\n给自己一份小礼物吧`,
+      `🎬 情感口播 · ${p.name}\n\n【场景】\n（温暖的家庭场景）\n\n你有没有过这样的时刻——\n累了一天\n什么都不想说\n只想被温柔对待\n\n【产品】\n【${p.name}】\n给了我这样的感觉\n\n🌿 ${p.features.split('、')[0]}\n🌿 ${p.features.split('、')[1] || '安静地陪伴'}\n\n【结尾】\n${p.audience || '每一个认真生活的你'}\n都值得这份温柔\n\n左下角，送给自己 💝`,
+      `🎬 治愈向口播 · ${p.name}\n\n（治愈系画面，慢节奏）\n\n生活不总是完美的\n但总有一些小东西\n能让它变得好一点点\n\n💕 ${p.name}\n\n${p.features.split('、')[0]}\n${p.features.split('、')[1] || '暖暖的'}\n\n给${p.audience || '自己'}一点仪式感吧\n\n左下角链接\n温柔生活，从此刻开始 🌙`
+    ],
+    trendy: (p) => [
+      `🎬 快节奏带货 · ${p.name}\n\n（快剪 + 强节奏 BGM）\n\n【0-3秒】\n停！！\n这个东西你必须知道！！\n\n【3-8秒】\n${p.name}\n⚡ ${p.features.split('、')[0]}\n⚡ ${p.features.split('、')[1] || '炸裂'}\n⚡ ${p.features.split('、')[2] || '爆赞'}\n\n【8-12秒】\n${p.audience || '全网都在抢'}！！\n\n【12-15秒】\n左下角！！左下角！！\n再不买真的没了！！`,
+      `🎬 爆款带货 · ${p.name}\n\n【hook】\n（惊讶表情）\n就是它！！终于找到了！！\n\n【3个卖点轰炸】\n🔥 ${p.features.split('、')[0]}\n🔥 ${p.features.split('、')[1] || '太牛了'}\n🔥 ${p.features.split('、')[2] || '值麻了'}\n\n【逼单】\n库存告急⚠️\n左下角 最后50单！！\n\n拍了的评论区告诉我！`,
+      `🎬 短视频带货 · ${p.name}\n\n（快节奏 卡点剪辑）\n\n你们一直在问的\n今天终于来了！！\n\n【${p.name}】\n\n💯 ${p.features.split('、')[0]}\n💯 ${p.features.split('、')[1] || '绝了'}\n💯 ${p.features.split('、')[2] || '逆天'}\n\n${p.audience || '所有人'} 必须拥有！！\n\n左下角链接\n抢不到别怪我！！`
+    ]
+  }
+};
+
+// ---- Main Logic ----
+function generate() {
+  const name = document.getElementById('productName').value.trim();
+  const features = document.getElementById('features').value.trim();
+  const audience = document.getElementById('audience').value.trim();
+
+  if (!name || !features) {
+    alert('请至少填写「产品名称」和「核心卖点」');
+    return;
+  }
+
+  const p = { name, features, audience };
+
+  if (state.useAI && state.apiAvailable) {
+    callAI(p);
+  } else {
+    generateFromTemplate(p);
+  }
+}
+
+// 模板引擎生成（离线可用）
+function generateFromTemplate(p) {
+  const platformTemplates = templates[state.platform];
+  const variantFn = platformTemplates?.[state.tone];
+
+  if (!variantFn) {
+    state.results = ['该风格暂未支持，请选择其他风格组合'];
+    state.currentVariant = 0;
+    renderOutput();
+    return;
+  }
+
+  state.results = variantFn(p);
+  state.currentVariant = 0;
+  saveToHistory(p, state.results, state.platform, state.tone);
+  renderOutput();
+}
+
+// AI API 生成（真实智能文案）
+async function callAI(p) {
+  if (state.isGenerating) return;
+  state.isGenerating = true;
+
+  const outputText = document.getElementById('outputText');
+  const btnGen = document.getElementById('btnGenerate');
+  outputText.innerHTML = '<div class="placeholder">🤖 AI 正在创作中……</div>';
+  btnGen.textContent = '⏳ 生成中...';
+  btnGen.disabled = true;
+
+  try {
+    const res = await fetch(state.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: p.name,
+        features: p.features,
+        audience: p.audience,
+        platform: state.platform,
+        tone: state.tone
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      const msg = data.error || data.quota?.message || '未知错误';
+      throw new Error(msg);
+    }
+
+    if (data.results && data.results.length > 0) {
+      state.results = data.results;
+      state.currentVariant = 0;
+      saveToHistory(p, state.results, state.platform, state.tone);
+    } else {
+      throw new Error('AI 未返回有效文案');
+    }
+  } catch (err) {
+    state.results = [`❌ 生成失败：${err.message}\n\n👉 请确认：\n1. 后端服务已启动（npm start）\n2. API Key 已正确配置\n3. 网络连接正常\n\n💡 可切换到「模板引擎模式」继续使用`];
+    state.currentVariant = 0;
+  }
+
+  state.isGenerating = false;
+  btnGen.textContent = '🚀 生成文案';
+  btnGen.disabled = false;
+  renderOutput();
+}
+
+function renderOutput() {
+  const outputText = document.getElementById('outputText');
+  if (state.results.length === 0) {
+    outputText.innerHTML = '<div class="placeholder">👆 填入产品信息，点击「生成文案」开始创作</div>';
+  } else {
+    outputText.textContent = state.results[state.currentVariant] || '';
+  }
+
+  // Update tabs
+  document.querySelectorAll('.output-tab').forEach(tab => {
+    const idx = parseInt(tab.dataset.index);
+    tab.classList.toggle('active', idx === state.currentVariant);
+  });
+}
+
+// AI 模式切换
+function toggleMode() {
+  if (!state.apiAvailable) {
+    alert('🔌 AI 后端未连接。\n\n请先在 server 目录下：\n1. 复制 .env.example 为 .env 并填入 API Key\n2. 运行 npm install && npm start\n3. 刷新本页面');
+    return;
+  }
+  state.useAI = !state.useAI;
+  updateModeBadge();
+}
+
+function updateModeBadge() {
+  const badge = document.getElementById('modeToggle');
+  if (state.useAI) {
+    badge.textContent = '🤖 AI 智能模式';
+    badge.style.background = 'rgba(34,197,94,.25)';
+  } else {
+    badge.textContent = '📋 模板引擎模式';
+    badge.style.background = 'rgba(255,255,255,.2)';
+  }
+}
+
+// 检测后端 API 是否可用
+async function checkAPI() {
+  const statusEl = document.getElementById('apiStatus');
+  statusEl.style.display = 'inline-block';
+  statusEl.textContent = '🔌 检测 API...';
+
+  try {
+    const healthUrl = state.apiUrl.replace('/api/generate', '/api/health');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(healthUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (res.ok) {
+      state.apiAvailable = true;
+      statusEl.textContent = '🟢 API 已连接';
+      statusEl.style.background = 'rgba(34,197,94,.25)';
+      return;
+    }
+  } catch (_) { /* offline */ }
+
+  state.apiAvailable = false;
+  statusEl.textContent = '🔴 API 未连接';
+  statusEl.style.background = 'rgba(239,68,68,.25)';
+}
+
+// ---- Event Listeners ----
+document.getElementById('btnGenerate').addEventListener('click', generate);
+
+// Platform selector
+document.getElementById('platformGrid').addEventListener('click', (e) => {
+  const btn = e.target.closest('.platform-btn');
+  if (!btn) return;
+  document.querySelectorAll('.platform-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.platform = btn.dataset.platform;
+});
+
+// Tone selector
+document.getElementById('toneGrid').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tone-btn');
+  if (!btn) return;
+  document.querySelectorAll('.tone-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.tone = btn.dataset.tone;
+});
+
+// Output tabs
+document.getElementById('outputTabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('.output-tab');
+  if (!tab) return;
+  state.currentVariant = parseInt(tab.dataset.index);
+  renderOutput();
+});
+
+// Copy button
+document.getElementById('btnCopy').addEventListener('click', () => {
+  const text = state.results[state.currentVariant];
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('btnCopy');
+    btn.textContent = '✅ 已复制';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = '📋 一键复制';
+      btn.classList.remove('copied');
+    }, 2000);
+  }).catch(() => {
+    alert('复制失败，请手动选择复制');
+  });
+});
+
+// Example fill
+document.getElementById('exampleList').addEventListener('click', (e) => {
+  const item = e.target.closest('.example-item');
+  if (!item) return;
+  const ex = examples[item.dataset.example];
+  if (!ex) return;
+  document.getElementById('productName').value = ex.name;
+  document.getElementById('features').value = ex.features;
+  document.getElementById('audience').value = ex.audience;
+});
+
+// Keyboard shortcut
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    generate();
+  }
+});
+
+// Mode toggle
+document.getElementById('modeToggle').addEventListener('click', toggleMode);
+
+// API health check on page load
+checkAPI();
+// Re-check every 30 seconds
+setInterval(checkAPI, 30000);
+
+// ============================================================
+// Tab Navigation
+// ============================================================
+const panels = {
+  generate: document.querySelectorAll('.container > .card:not(#panelHistory):not(#panelBatch), .container > #outputCard'),
+};
+
+function switchView(view) {
+  // Update tabs
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+
+  // Show/hide panels
+  const allCards = document.querySelectorAll('.container > .card, .container > #outputCard');
+
+  if (view === 'history') {
+    allCards.forEach(c => c.style.display = 'none');
+    document.getElementById('panelHistory').style.display = '';
+    document.getElementById('outputCard').style.display = '';
+    renderHistory();
+  } else if (view === 'batch') {
+    allCards.forEach(c => c.style.display = 'none');
+    document.getElementById('panelBatch').style.display = '';
+    document.getElementById('outputCard').style.display = '';
+  } else {
+    // generate view
+    allCards.forEach(c => c.style.display = '');
+    document.getElementById('panelHistory').style.display = 'none';
+    document.getElementById('panelBatch').style.display = 'none';
+  }
+}
+
+document.getElementById('navTabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('.nav-tab');
+  if (!tab) return;
+  switchView(tab.dataset.view);
+});
+
+// ============================================================
+// History Management (localStorage)
+// ============================================================
+const HISTORY_KEY = 'copywriting_history';
+const MAX_HISTORY = 50;
+
+function saveToHistory(product, results, platform, tone) {
+  const history = getHistory();
+  history.unshift({
+    id: Date.now(),
+    product: product.name,
+    features: product.features,
+    audience: product.audience || '',
+    platform,
+    tone,
+    preview: results[0]?.substring(0, 80) || '',
+    results,
+    time: new Date().toLocaleString('zh-CN'),
+  });
+  if (history.length > MAX_HISTORY) history.length = MAX_HISTORY;
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  updateHistoryCount();
+}
+
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
+  catch (_) { return []; }
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  const clearBtn = document.getElementById('btnClearHistory');
+  const history = getHistory();
+
+  if (history.length === 0) {
+    list.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px;">暂无历史记录</p>';
+    clearBtn.style.display = 'none';
+    return;
+  }
+
+  clearBtn.style.display = '';
+  list.innerHTML = history.map((h, i) => {
+    const platformNames = { xiaohongshu:'小红书', pengyouquan:'朋友圈', taobao:'淘宝', douyin:'抖音' };
+    const toneNames = { lively:'活泼', professional:'专业', emotional:'走心', trendy:'标题党' };
+    return `<div class="history-item" data-idx="${i}">
+      <div class="meta">
+        <span>${platformNames[h.platform] || h.platform}</span>
+        <span>·</span>
+        <span>${toneNames[h.tone] || h.tone}</span>
+        <span>·</span>
+        <span>${h.time}</span>
+      </div>
+      <div class="preview"><strong>${h.product}</strong> — ${h.preview}</div>
+    </div>`;
+  }).join('');
+
+  // Click to restore
+  list.querySelectorAll('.history-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const h = history[parseInt(item.dataset.idx)];
+      state.results = h.results;
+      state.currentVariant = 0;
+      state.platform = h.platform;
+      state.tone = h.tone;
+      document.getElementById('productName').value = h.product;
+      document.getElementById('features').value = h.features;
+      document.getElementById('audience').value = h.audience;
+      switchView('generate');
+      renderOutput();
+    });
+  });
+}
+
+function updateHistoryCount() {
+  const el = document.getElementById('historyCount');
+  const count = getHistory().length;
+  el.textContent = count > 0 ? `(${count})` : '';
+}
+
+document.getElementById('btnClearHistory').addEventListener('click', () => {
+  if (confirm('确定清空所有历史记录？')) {
+    localStorage.removeItem(HISTORY_KEY);
+    renderHistory();
+    updateHistoryCount();
+  }
+});
+
+// ============================================================
+// Batch Generation
+// ============================================================
+document.getElementById('btnBatchGenerate').addEventListener('click', async () => {
+  const input = document.getElementById('batchInput').value.trim();
+  if (!input) return alert('请输入产品列表');
+
+  const lines = input.split('\n').filter(l => l.trim());
+  const resultsDiv = document.getElementById('batchResults');
+  resultsDiv.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px;">⏳ 正在生成 ' + lines.length + ' 个产品的文案...</p>';
+
+  const generated = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const parts = lines[i].split('|').map(s => s.trim());
+    const p = {
+      name: parts[0] || '产品' + (i + 1),
+      features: parts[1] || '',
+      audience: parts[2] || '',
+    };
+
+    // Use template engine for batch (fast, offline)
+    try {
+      const platformTemplates = templates[state.platform];
+      const variantFn = platformTemplates?.[state.tone];
+      if (variantFn) {
+        const results = variantFn(p);
+        generated.push({ product: p.name, text: results[0] });
+        saveToHistory(p, results, state.platform, state.tone);
+      }
+    } catch (_) {}
+
+    // Update progress
+    resultsDiv.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px;">⏳ 进度: ' + (i + 1) + '/' + lines.length + '</p>';
+  }
+
+  // Render results
+  resultsDiv.innerHTML = generated.map(g =>
+    `<div class="batch-result-item"><h4>📌 ${g.product}</h4>${g.text}</div>`
+  ).join('');
+
+  updateHistoryCount();
+});
+
+// Init
+updateHistoryCount();
+</script>
+</body>
+</html>
