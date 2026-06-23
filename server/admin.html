@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理后台 — 文案灵境</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:#f1f5f9;color:#1e293b;padding:20px;max-width:600px;margin:0 auto}
+h1{font-size:1.3rem;margin-bottom:20px}
+.card{background:#fff;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card.pending{border-left:3px solid #f59e0b}
+.card.done{border-left:3px solid #22c55e;opacity:.7}
+.card .meta{font-size:.8rem;color:#64748b;margin-bottom:8px}
+.card .info{font-size:.9rem;margin-bottom:8px}
+.card .info span{font-weight:700}
+.btn{display:inline-block;padding:8px 18px;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:.85rem}
+.btn-approve{background:#22c55e;color:#fff}
+.btn-reject{background:#ef4444;color:#fff;margin-left:8px}
+.empty{text-align:center;color:#94a3b8;padding:40px}
+.refresh{background:#f97316;color:#fff;float:right}
+</style>
+</head>
+<body>
+<h1>📋 待处理付款 <button class="btn refresh" onclick="location.reload()">🔄 刷新</button></h1>
+<div id="pendingList"></div>
+<h1>✅ 已处理 <span style="font-size:.8rem;color:#94a3b8">（最近20条）</span></h1>
+<div id="doneList"></div>
+
+<script>
+const PENDING_KEY = 'copywriting_pending_payments';
+const DONE_KEY = 'copywriting_done_payments';
+
+function getList(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(_) { return []; }
+}
+function saveList(key, list) { localStorage.setItem(key, JSON.stringify(list)); }
+
+function render() {
+  const pending = getList(PENDING_KEY);
+  const done = getList(DONE_KEY);
+
+  document.getElementById('pendingList').innerHTML = pending.length === 0
+    ? '<div class="empty">🎉 没有待处理付款</div>'
+    : pending.map((p,i) => `
+      <div class="card pending">
+        <div class="meta">🕐 ${p.time}</div>
+        <div class="info">
+          <span>金额：</span>¥${p.amount}<br>
+          <span>订单尾号：</span>${p.ref}<br>
+          <span>联系方式：</span>${p.contact || '未填写'}
+        </div>
+        <button class="btn btn-approve" onclick="approve(${i})">✅ 确认收款</button>
+        <button class="btn btn-reject" onclick="reject(${i})">❌ 未收到</button>
+      </div>`).join('');
+
+  document.getElementById('doneList').innerHTML = done.length === 0
+    ? '<div class="empty">暂无记录</div>'
+    : done.slice(-20).reverse().map(p => `
+      <div class="card done">
+        <div class="meta">🕐 ${p.time} | 激活码：${p.code}</div>
+        <div class="info">¥${p.amount} — ${p.ref} — ${p.contact||'无联系方式'}</div>
+      </div>`).join('');
+}
+
+function approve(i) {
+  const pending = getList(PENDING_KEY);
+  const item = pending[i];
+  const code = 'PRO-' + Date.now().toString(36).toUpperCase();
+  const done = getList(DONE_KEY);
+  done.push({ ...item, code, approvedAt: new Date().toLocaleString('zh-CN') });
+  saveList(DONE_KEY, done);
+  pending.splice(i, 1);
+  saveList(PENDING_KEY, pending);
+
+  // 复制激活码
+  navigator.clipboard.writeText(code);
+  alert('✅ 已生成激活码并复制到剪贴板：\n\n' + code + '\n\n发给用户即可激活！');
+  render();
+}
+
+function reject(i) {
+  if (!confirm('确定标记为未收到款？')) return;
+  const pending = getList(PENDING_KEY);
+  pending.splice(i, 1);
+  saveList(PENDING_KEY, pending);
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
