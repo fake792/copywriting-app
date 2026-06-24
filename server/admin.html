@@ -5,88 +5,151 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>管理后台 — 文案灵境</title>
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:#f1f5f9;color:#1e293b;padding:20px;max-width:600px;margin:0 auto}
-h1{font-size:1.3rem;margin-bottom:20px}
-.card{background:#fff;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;background:#f1f5f9;color:#1e293b;padding:20px;max-width:760px;margin:0 auto}
+h1{font-size:1.25rem;margin:20px 0 14px}
+.toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap}
+.token{display:flex;gap:8px;align-items:center}
+.token input{padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;min-width:220px}
+.card{background:#fff;border-radius:12px;padding:18px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .card.pending{border-left:3px solid #f59e0b}
-.card.done{border-left:3px solid #22c55e;opacity:.7}
-.card .meta{font-size:.8rem;color:#64748b;margin-bottom:8px}
-.card .info{font-size:.9rem;margin-bottom:8px}
-.card .info span{font-weight:700}
-.btn{display:inline-block;padding:8px 18px;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:.85rem}
+.card.done{border-left:3px solid #22c55e}
+.card.rejected{border-left:3px solid #ef4444;opacity:.75}
+.meta{font-size:.8rem;color:#64748b;margin-bottom:8px}
+.info{font-size:.92rem;line-height:1.8;margin-bottom:12px}
+.info span{font-weight:700}
+.code{font-family:Consolas,monospace;background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;border-radius:8px;padding:8px 10px;margin-top:8px;display:inline-block}
+.btn{display:inline-block;padding:8px 16px;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:.85rem}
 .btn-approve{background:#22c55e;color:#fff}
 .btn-reject{background:#ef4444;color:#fff;margin-left:8px}
-.empty{text-align:center;color:#94a3b8;padding:40px}
-.refresh{background:#f97316;color:#fff;float:right}
+.btn-refresh{background:#f97316;color:#fff}
+.btn-copy{background:#e2e8f0;color:#334155;margin-left:8px}
+.empty{text-align:center;color:#94a3b8;padding:32px;background:#fff;border-radius:12px}
+.error{color:#dc2626;background:#fef2f2;border:1px solid #fecaca;padding:10px 12px;border-radius:8px;margin-bottom:12px;display:none}
 </style>
 </head>
 <body>
-<h1>📋 待处理付款 <button class="btn refresh" onclick="location.reload()">🔄 刷新</button></h1>
+<div class="toolbar">
+  <div class="token">
+    <label for="adminToken">管理员口令</label>
+    <input id="adminToken" type="password" placeholder="未设置 ADMIN_TOKEN 可留空">
+  </div>
+  <button class="btn btn-refresh" onclick="loadPayments()">刷新</button>
+</div>
+<div id="errorBox" class="error"></div>
+
+<h1>待处理付款</h1>
 <div id="pendingList"></div>
-<h1>✅ 已处理 <span style="font-size:.8rem;color:#94a3b8">（最近20条）</span></h1>
+
+<h1>已处理 <span style="font-size:.8rem;color:#94a3b8">最近 50 条</span></h1>
 <div id="doneList"></div>
 
 <script>
-const PENDING_KEY = 'copywriting_pending_payments';
-const DONE_KEY = 'copywriting_done_payments';
+let currentData = { pending: [], reviewed: [] };
 
-function getList(key) {
-  try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(_) { return []; }
+function escapeHTML(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]));
 }
-function saveList(key, list) { localStorage.setItem(key, JSON.stringify(list)); }
+
+function formatTime(value) {
+  if (!value) return '';
+  try { return new Date(value).toLocaleString('zh-CN'); } catch (_) { return value; }
+}
+
+function adminHeaders() {
+  const token = document.getElementById('adminToken').value.trim();
+  localStorage.setItem('copywriting_admin_token', token);
+  return token ? { 'X-Admin-Token': token } : {};
+}
+
+function showError(message) {
+  const el = document.getElementById('errorBox');
+  el.textContent = message || '';
+  el.style.display = message ? 'block' : 'none';
+}
+
+async function loadPayments() {
+  showError('');
+  try {
+    const res = await fetch('/api/admin/payments', { headers: adminHeaders() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '读取失败');
+    currentData = data;
+    render();
+  } catch (err) {
+    showError(err.message);
+  }
+}
 
 function render() {
-  const pending = getList(PENDING_KEY);
-  const done = getList(DONE_KEY);
+  const pending = currentData.pending || [];
+  const reviewed = currentData.reviewed || [];
 
   document.getElementById('pendingList').innerHTML = pending.length === 0
-    ? '<div class="empty">🎉 没有待处理付款</div>'
-    : pending.map((p,i) => `
+    ? '<div class="empty">没有待处理付款</div>'
+    : pending.map((p) => `
       <div class="card pending">
-        <div class="meta">🕐 ${p.time}</div>
+        <div class="meta">${escapeHTML(formatTime(p.createdAt))} | 编号：${escapeHTML(p.id)}</div>
         <div class="info">
-          <span>金额：</span>¥${p.amount}<br>
-          <span>订单尾号：</span>${p.ref}<br>
-          <span>联系方式：</span>${p.contact || '未填写'}
+          <span>套餐：</span>${escapeHTML(p.plan === 'yearly' ? '企业/年费' : 'Pro 月费')}<br>
+          <span>金额：</span>¥${escapeHTML(p.amount)}<br>
+          <span>订单尾号：</span>${escapeHTML(p.orderTail)}<br>
+          <span>微信号：</span>${escapeHTML(p.wechatId)}
         </div>
-        <button class="btn btn-approve" onclick="approve(${i})">✅ 确认收款</button>
-        <button class="btn btn-reject" onclick="reject(${i})">❌ 未收到</button>
+        <button class="btn btn-approve" onclick="approve('${escapeHTML(p.id)}')">确认收款并生成激活码</button>
+        <button class="btn btn-reject" onclick="rejectPayment('${escapeHTML(p.id)}')">未收到款</button>
       </div>`).join('');
 
-  document.getElementById('doneList').innerHTML = done.length === 0
+  document.getElementById('doneList').innerHTML = reviewed.length === 0
     ? '<div class="empty">暂无记录</div>'
-    : done.slice(-20).reverse().map(p => `
-      <div class="card done">
-        <div class="meta">🕐 ${p.time} | 激活码：${p.code}</div>
-        <div class="info">¥${p.amount} — ${p.ref} — ${p.contact||'无联系方式'}</div>
+    : reviewed.map((p) => `
+      <div class="card ${p.status === 'rejected' ? 'rejected' : 'done'}">
+        <div class="meta">${escapeHTML(formatTime(p.reviewedAt))} | ${escapeHTML(p.status)}</div>
+        <div class="info">
+          ¥${escapeHTML(p.amount)} | 尾号 ${escapeHTML(p.orderTail)} | 微信 ${escapeHTML(p.wechatId)}
+          ${p.code ? `<br><span>激活码：</span><span class="code">${escapeHTML(p.code)}</span><button class="btn btn-copy" onclick="copyCode('${escapeHTML(p.code)}')">复制</button>` : ''}
+        </div>
       </div>`).join('');
 }
 
-function approve(i) {
-  const pending = getList(PENDING_KEY);
-  const item = pending[i];
-  const code = 'PRO-' + Date.now().toString(36).toUpperCase();
-  const done = getList(DONE_KEY);
-  done.push({ ...item, code, approvedAt: new Date().toLocaleString('zh-CN') });
-  saveList(DONE_KEY, done);
-  pending.splice(i, 1);
-  saveList(PENDING_KEY, pending);
-
-  // 复制激活码
-  navigator.clipboard.writeText(code);
-  alert('✅ 已生成激活码并复制到剪贴板：\n\n' + code + '\n\n发给用户即可激活！');
-  render();
+async function approve(id) {
+  if (!confirm('确认已收到这笔款，并生成激活码？')) return;
+  await updatePayment(`/api/admin/payments/${encodeURIComponent(id)}/approve`, true);
 }
 
-function reject(i) {
+async function rejectPayment(id) {
   if (!confirm('确定标记为未收到款？')) return;
-  const pending = getList(PENDING_KEY);
-  pending.splice(i, 1);
-  saveList(PENDING_KEY, pending);
-  render();
+  await updatePayment(`/api/admin/payments/${encodeURIComponent(id)}/reject`);
 }
 
-render();
+async function updatePayment(url, copyGeneratedCode) {
+  showError('');
+  try {
+    const res = await fetch(url, { method: 'POST', headers: adminHeaders() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '操作失败');
+    if (copyGeneratedCode && data.code) {
+      await copyCode(data.code);
+      alert('已生成激活码并复制：\n\n' + data.code + '\n\n把这个码发给用户，用户在升级页输入后即可开通 Pro。');
+    }
+    await loadPayments();
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+async function copyCode(code) {
+  try { await navigator.clipboard.writeText(code); }
+  catch (_) { prompt('复制失败，请手动复制：', code); }
+}
+
+document.getElementById('adminToken').value = localStorage.getItem('copywriting_admin_token') || '';
+loadPayments();
 </script>
 </body>
 </html>

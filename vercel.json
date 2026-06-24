@@ -9,20 +9,15 @@
     {
       "src": "pro-upgrade.html",
       "use": "@vercel/static"
+    },
+    {
+      "src": "server/server.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     { "src": "/", "dest": "/index.html" },
     { "src": "/upgrade", "dest": "/pro-upgrade.html" },
-    {
-      "src": "/api/(.*)",
-      "dest": "https://copywriting-api.railway.app/api/$1"
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://copywriting-api.railway.app/api/:path*"
-    }
+    { "src": "/api/(.*)", "dest": "/server/server.js" }
   ]
 }

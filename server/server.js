@@ -10,11 +10,11 @@ const cors = require('cors');
 const OpenAI = require('openai');
 
 const app = express();
-const PORT = process.env.PORT || 3456;
+const PORT = process.env.PORT || 3001;
 
 // ---- Middleware ----
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '32kb' }));
 app.use(express.static(__dirname));
 
 // ---- OpenAI Client ----
@@ -22,9 +22,28 @@ const openai = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   : null;
 
+function withTimeout(promise, ms) {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('AI 请求超时')), ms);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId);
+  });
+}
+
 // ---- In-memory usage tracking (reset daily) ----
 const FREE_DAILY_LIMIT = 5;
 const usageMap = new Map(); // ip -> { count, date }
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip || req.connection.remoteAddress || 'unknown';
+}
 
 function getUsage(ip) {
   const today = new Date().toDateString();
@@ -112,12 +131,17 @@ ${platformGuides[platform] || ''}
 
 // ---- Fallback: Template-based generation when no API key ----
 function fallbackGenerate({ name, features, audience, platform, tone }) {
-  const fallbacks = [
-    `✨ 发现宝藏了！！【${name}】真的太绝了
+  const featureList = String(features || '')
+    .split(/[、,\n]/)
+    .map(item => item.trim())
+    .filter(Boolean);
 
-${features.split('、')[0] || '效果惊艳'}
-${features.split('、')[1] || '体验拉满'}
-${features.split('、')[2] || '用一次就爱上'}
+  const fallbacks = [
+`✨ 发现宝藏了！！【${name}】真的太绝了
+
+${featureList[0] || '效果惊艳'}
+${featureList[1] || '体验拉满'}
+${featureList[2] || '用一次就爱上'}
 
 ${audience || '所有朋友'}闭眼入！！真的不踩雷`,
     `🔥 分享一个被问爆的好东西——
@@ -125,17 +149,17 @@ ${audience || '所有朋友'}闭眼入！！真的不踩雷`,
 【${name}】
 
 为什么这么火？👇
-· ${features.split('、')[0] || '品质在线'}
-· ${features.split('、')[1] || '口碑爆棚'}
-· ${features.split('、')[2] || '性价比高'}
+· ${featureList[0] || '品质在线'}
+· ${featureList[1] || '口碑爆棚'}
+· ${featureList[2] || '性价比高'}
 
 ${audience ? audience + '的朋友赶紧冲！' : '需要的赶紧安排！'}`,
     `💡 真诚推荐 | ${name}
 
 做了很多功课，总结几点：
-✅ ${features.split('、')[0] || '核心优势突出'}
-✅ ${features.split('、')[1] || '细节做到位'}
-✅ ${features.split('、')[2] || '用着放心'}
+✅ ${featureList[0] || '核心优势突出'}
+✅ ${featureList[1] || '细节做到位'}
+✅ ${featureList[2] || '用着放心'}
 
 适合：${audience || '大多数场景'}
 供参考，理性种草～`,
@@ -147,10 +171,10 @@ ${audience ? audience + '的朋友赶紧冲！' : '需要的赶紧安排！'}`,
 // ---- API Route: Generate ----
 app.post('/api/generate', async (req, res) => {
   try {
-    const { name, features, audience, platform, tone } = req.body;
+    const { name, features, audience, platform, tone } = req.body || {};
 
     // ---- Validate ----
-    if (!name || !features) {
+    if (typeof name !== 'string' || typeof features !== 'string' || !name.trim() || !features.trim()) {
       return res.status(400).json({ error: '请填写产品名称和核心卖点' });
     }
 
@@ -165,7 +189,7 @@ app.post('/api/generate', async (req, res) => {
     }
 
     // ---- Usage check ----
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const ip = getClientIp(req);
     const userIsPro = isPro(ip);
     const usage = getUsage(ip);
 
@@ -183,10 +207,7 @@ app.post('/api/generate', async (req, res) => {
     if (openai) {
       // Try real AI generation with timeout
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
-
-        const completion = await openai.chat.completions.create({
+        const completion = await withTimeout(openai.chat.completions.create({
           model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
           messages: [
             { role: 'system', content: '你是专业电商文案写手。严格按照要求输出，不做额外解释。' },
@@ -194,9 +215,7 @@ app.post('/api/generate', async (req, res) => {
           ],
           temperature: 0.85,
           max_tokens: 1500,
-        }, { signal: controller.signal });
-
-        clearTimeout(timeout);
+        }), 8000);
 
         const rawText = completion.choices[0]?.message?.content || '';
         const parts = rawText.split(/---方案[A-C]---/).filter(s => s.trim());
@@ -236,7 +255,6 @@ app.post('/api/generate', async (req, res) => {
 // ---- API Route: Health ----
 
 // ---- Pro Activation System ----
-// Pre-generated activation codes (in production, generate per purchase)
 const PRO_CODES = new Map([
   ['PRO-DEMO-FREE', { type: 'monthly', activatedAt: null, expiresAt: null }],
   ['PRO-TEST-001', { type: 'monthly', activatedAt: null, expiresAt: null }],
@@ -245,11 +263,115 @@ const PRO_CODES = new Map([
 
 // Track which IP has Pro status
 const proUsers = new Map(); // ip -> { expiresAt }
+const pendingPayments = [];
+const reviewedPayments = [];
+
+function generateProCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let suffix = '';
+  for (let i = 0; i < 12; i += 1) {
+    if (i > 0 && i % 4 === 0) suffix += '-';
+    suffix += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return `PRO-${suffix}`;
+}
+
+function getAdminToken(req) {
+  return req.headers['x-admin-token'] || req.query.token || '';
+}
+
+function requireAdmin(req, res, next) {
+  const configuredToken = process.env.ADMIN_TOKEN;
+  if (!configuredToken) {
+    return next();
+  }
+  if (getAdminToken(req) !== configuredToken) {
+    return res.status(401).json({ error: '管理员口令错误' });
+  }
+  next();
+}
+
+app.post('/api/payments', (req, res) => {
+  const { amount, orderTail, wechatId, plan } = req.body || {};
+  const normalizedOrderTail = String(orderTail || '').trim();
+  const normalizedWechatId = String(wechatId || '').trim();
+
+  if (!/^\d{4}$/.test(normalizedOrderTail)) {
+    return res.status(400).json({ error: '请填写支付宝订单号后 4 位' });
+  }
+  if (!normalizedWechatId) {
+    return res.status(400).json({ error: '请填写微信号' });
+  }
+
+  const payment = {
+    id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`.toUpperCase(),
+    amount: String(amount || ''),
+    orderTail: normalizedOrderTail,
+    wechatId: normalizedWechatId,
+    plan: plan === 'yearly' ? 'yearly' : 'monthly',
+    ip: getClientIp(req),
+    status: 'pending',
+    createdAt: new Date().toISOString(),
+  };
+
+  pendingPayments.unshift(payment);
+  res.json({ success: true, paymentId: payment.id });
+});
+
+app.get('/api/admin/payments', requireAdmin, (req, res) => {
+  res.json({
+    pending: pendingPayments,
+    reviewed: reviewedPayments.slice(0, 50),
+  });
+});
+
+app.post('/api/admin/payments/:id/approve', requireAdmin, (req, res) => {
+  const index = pendingPayments.findIndex(item => item.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ error: '付款记录不存在或已处理' });
+  }
+
+  const payment = pendingPayments.splice(index, 1)[0];
+  let code = generateProCode();
+  while (PRO_CODES.has(code)) code = generateProCode();
+
+  PRO_CODES.set(code, {
+    type: payment.plan,
+    activatedAt: null,
+    expiresAt: null,
+    paymentId: payment.id,
+  });
+
+  const reviewed = {
+    ...payment,
+    status: 'approved',
+    code,
+    reviewedAt: new Date().toISOString(),
+  };
+  reviewedPayments.unshift(reviewed);
+  res.json({ success: true, code, payment: reviewed });
+});
+
+app.post('/api/admin/payments/:id/reject', requireAdmin, (req, res) => {
+  const index = pendingPayments.findIndex(item => item.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ error: '付款记录不存在或已处理' });
+  }
+
+  const payment = pendingPayments.splice(index, 1)[0];
+  const reviewed = {
+    ...payment,
+    status: 'rejected',
+    reviewedAt: new Date().toISOString(),
+  };
+  reviewedPayments.unshift(reviewed);
+  res.json({ success: true, payment: reviewed });
+});
 
 // Activate Pro license
 app.post('/api/activate', (req, res) => {
-  const { code } = req.body;
-  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+  const { code } = req.body || {};
+  const ip = getClientIp(req);
 
   if (!code || typeof code !== 'string') {
     return res.status(400).json({ error: '请输入激活码' });
@@ -277,12 +399,13 @@ app.post('/api/activate', (req, res) => {
     success: true,
     message: `🎉 Pro 激活成功！${codeData.type === 'yearly' ? '年费' : '月费'}会员已生效`,
     expiresAt: new Date(now + duration).toISOString(),
+    expiry: new Date(now + duration).toISOString(),
   });
 });
 
 // Check Pro status
-app.get('/api/pro-status', (req, res) => {
-  const ip = req.ip || req.connection.remoteAddress || 'unknown';
+function sendProStatus(req, res) {
+  const ip = getClientIp(req);
   const pro = proUsers.get(ip);
 
   if (pro && pro.expiresAt > Date.now()) {
@@ -294,7 +417,10 @@ app.get('/api/pro-status', (req, res) => {
   } else {
     res.json({ pro: false });
   }
-});
+}
+
+app.get('/api/pro-status', sendProStatus);
+app.get('/api/me', sendProStatus);
 
 // Helper: check if IP is Pro
 function isPro(ip) {
@@ -311,8 +437,12 @@ app.get('/api/health', (req, res) => {
 });
 
 // ---- Start ----
-app.listen(PORT, () => {
-  console.log(`\n🚀 文案灵境 API 已启动: http://localhost:${PORT}`);
-  console.log(`📋 免费额度: ${FREE_DAILY_LIMIT} 次/天`);
-  console.log(`🤖 AI 模式: ${openai ? '✅ 已启用 (OpenAI)' : '⚠️ 模板模式（设置 OPENAI_API_KEY 启用 AI）'}\n`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`\n🚀 文案灵境 API 已启动: http://localhost:${PORT}`);
+    console.log(`📋 免费额度: ${FREE_DAILY_LIMIT} 次/天`);
+    console.log(`🤖 AI 模式: ${openai ? '✅ 已启用 (OpenAI)' : '⚠️ 模板模式（设置 OPENAI_API_KEY 启用 AI）'}\n`);
+  });
+}
+
+module.exports = app;

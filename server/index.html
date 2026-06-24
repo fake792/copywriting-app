@@ -308,6 +308,20 @@ body {
   font-weight: 700;
   font-size: 1.2rem;
 }
+.banner .upgrade-link {
+  display: inline-block;
+  margin-top: 16px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  text-decoration: none;
+}
+.banner .upgrade-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(249,115,22,.25);
+}
 
 /* ===== Placeholder ===== */
 .placeholder {
@@ -327,7 +341,6 @@ body {
   <div style="display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:12px;">
     <span class="badge" id="modeToggle" style="cursor:pointer;user-select:none;" title="点击切换 AI 模式">📋 模板引擎模式</span>
     <span class="badge" id="apiStatus" style="display:none;">🔌 未连接 API</span>
-    <a href="/pro-upgrade.html" class="badge" style="background:rgba(34,197,94,.35);cursor:pointer;text-decoration:none;color:#fff;font-weight:700;">💎 升级 Pro</a>
   </div>
 </header>
 
@@ -436,6 +449,8 @@ body {
       <strong>企业版 ¥99/月</strong>：API 接入 + 批量生成 + 私有模板
     </p>
     <span class="price-tag">💰 1000 用户 × ¥19.9 = ¥19,900/月</span>
+    <br>
+    <a class="upgrade-link" href="/pro-upgrade.html">升级 Pro</a>
   </div>
 
 </div>
@@ -455,10 +470,23 @@ let state = {
   apiAvailable: false,
   isGenerating: false,
   apiUrl: (() => {
-    // Production backend
-    return 'https://copywriting-app-production.up.railway.app/api/generate';
+    const origin = window.location.origin;
+    if (origin && origin !== 'null' && !window.location.protocol.startsWith('file')) {
+      return `${origin}/api/generate`;
+    }
+    return 'http://localhost:3001/api/generate';
   })(),
 };
+
+function escapeHTML(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]));
+}
 
 // ---- Example data ----
 const examples = {
@@ -868,15 +896,20 @@ function renderHistory() {
   list.innerHTML = history.map((h, i) => {
     const platformNames = { xiaohongshu:'小红书', pengyouquan:'朋友圈', taobao:'淘宝', douyin:'抖音' };
     const toneNames = { lively:'活泼', professional:'专业', emotional:'走心', trendy:'标题党' };
+    const platformName = escapeHTML(platformNames[h.platform] || h.platform);
+    const toneName = escapeHTML(toneNames[h.tone] || h.tone);
+    const time = escapeHTML(h.time);
+    const product = escapeHTML(h.product);
+    const preview = escapeHTML(h.preview);
     return `<div class="history-item" data-idx="${i}">
       <div class="meta">
-        <span>${platformNames[h.platform] || h.platform}</span>
+        <span>${platformName}</span>
         <span>·</span>
-        <span>${toneNames[h.tone] || h.tone}</span>
+        <span>${toneName}</span>
         <span>·</span>
-        <span>${h.time}</span>
+        <span>${time}</span>
       </div>
-      <div class="preview"><strong>${h.product}</strong> — ${h.preview}</div>
+      <div class="preview"><strong>${product}</strong> — ${preview}</div>
     </div>`;
   }).join('');
 
@@ -949,7 +982,7 @@ document.getElementById('btnBatchGenerate').addEventListener('click', async () =
 
   // Render results
   resultsDiv.innerHTML = generated.map(g =>
-    `<div class="batch-result-item"><h4>📌 ${g.product}</h4>${g.text}</div>`
+    `<div class="batch-result-item"><h4>📌 ${escapeHTML(g.product)}</h4>${escapeHTML(g.text)}</div>`
   ).join('');
 
   updateHistoryCount();
